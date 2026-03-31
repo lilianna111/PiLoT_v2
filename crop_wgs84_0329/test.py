@@ -45,6 +45,8 @@ def main():
     parser.add_argument("--t_far", type=float, default=20000.0)
     parser.add_argument("--save_outputs", action="store_true")
     parser.add_argument("--save_debug_vis", action="store_true")
+    parser.add_argument("--save_full_dom_points", action="store_true")
+    parser.add_argument("--print_corner_intrinsics", action="store_true")
     args = parser.parse_args()
 
     K, image_width, image_height = load_k_and_size(args.K_json)
@@ -66,6 +68,8 @@ def main():
         t_far=args.t_far,
         save_outputs=args.save_outputs,
         save_debug_vis=args.save_debug_vis,
+        save_full_dom_points=args.save_full_dom_points,
+        print_corner_intrinsics=args.print_corner_intrinsics,
     )
     print(f"\n[TIMING] crop_wgs84/test.py 总耗时: {time.perf_counter() - t0:.3f}s")
     print("bbox_img shape =", result["bbox_img"].shape)

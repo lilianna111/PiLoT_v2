@@ -66,3 +66,26 @@ python /home/amax/Documents/code/PiLoT/PiLoT/crop_wgs84_0329/test.py \
 
 
 python /home/amax/Documents/code/PiLoT/PiLoT/crop_wgs84/test.py   --dsm_path /media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/HKisland_GNSS/dsm_wgs84.tif   --dom_path /media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/HKisland_GNSS/dom_wgs84.tif   --output_dir /home/amax/Documents/code/PiLoT/PiLoT/crop_wgs84/test   --name sample   --lon 114.25834288619072   --lat 22.205296022324383   --alt 100.75537325828935   --roll 1.4894249861234055   --pitch 2.1523655622721525   --yaw 67.25778027171904   --K_json /home/amax/Documents/code/PiLoT_v2/crop/K.json
+
+
+
+python /home/amax/Documents/code/PiLoT_v2/crop_wgs84_0329/test.py   --dsm_path /media/amax/AE0E2AFD0E2ABE69/datasets/DSM/0.3/0.3/DSM_WGS84.tif   --dom_path /media/amax/AE0E2AFD0E2ABE69/datasets/DSM/0.3/0.3/DOM_WGS84.tif   --output_dir /home/amax/Documents/code/PiLoT_v2/crop_wgs84_0329/test   --name sample   --lon 112.999167   --lat 28.2933  --alt 53.674    --roll 0.0   --pitch 35.6   --yaw 177.7   --K_json /home/amax/Documents/code/PiLoT_v2/crop_wgs84_0329/K.json --save_outputs --save_debug_vis
+
+python crop_wgs84_0329/test.py \
+  --dsm_path /media/amax/AE0E2AFD0E2ABE69/datasets/mapscape/model/usa_2/dsm.tif \
+  --dom_path /media/amax/AE0E2AFD0E2ABE69/datasets/mapscape/model/usa_2/dom.tif \
+  --output_dir /home/amax/Documents/code/PiLoT_v2/tmp_crop_out \
+  --name test1 \
+  --lon -87.621232 \
+  --lat 41.860991999999996 \
+  --alt 500.0 \
+  --roll 0.0 \
+  --pitch 10.0 \
+  --yaw 281.3096633649805 \
+  --K_json /home/amax/Documents/code/PiLoT_v2/crop_wgs84_0329/K_mapscape.json \
+  --print_corner_intrinsics \
+  --save_outputs \
+  --save_debug_vis \
+  --save_full_dom_points
+-87.621232 41.860991999999996 800.0 0.0 10.0 281.3096633649805
+-87.621232 41.860991999999996 500.0 0.0 10.0 281.3096633649805

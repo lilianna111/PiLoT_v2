@@ -181,8 +181,8 @@ for target_name in "${target_names[@]}"; do
     echo "trans : $trans"
 
     echo "--- fpvloc"
-    python /home/amax/Documents/code/PiLoT/PiLoT/main.py \
-      --config "/home/amax/Documents/code/PiLoT/PiLoT/configs/feicuiwan_m4t.yaml" \
+    python /home/amax/Documents/code/PiLoT_v2/main.py \
+      --config "/home/amax/Documents/code/PiLoT_v2/configs/feicuiwan_m4t.yaml" \
       --init_euler "$euler" \
       --init_trans "$trans" \
       --name "$target_name"

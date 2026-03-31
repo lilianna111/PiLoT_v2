@@ -10,6 +10,7 @@ import shutil
 import argparse
 import ast
 import numpy as np
+import re
 from pathlib import Path
 from tqdm import tqdm
 from pprint import pformat
@@ -46,6 +47,49 @@ def log_stage_timing(prefix, **timings_ms):
         return
     parts = [f"{key}={value:.1f}ms" for key, value in timings_ms.items()]
     logging.info("%s %s", prefix, " | ".join(parts))
+
+
+def _parse_index_style_stem(stem):
+    match = re.fullmatch(r"(\d+)_(\d+)", stem)
+    if not match:
+        return None
+    return int(match.group(1)), int(match.group(2))
+
+
+def _parse_timestamp_style_stem(stem):
+    if re.fullmatch(r"\d+(?:\.\d+)?", stem) is None:
+        return None
+    try:
+        return float(stem)
+    except ValueError:
+        return None
+
+
+def make_image_sort_key(path, mode="auto"):
+    stem = os.path.basename(path).rsplit(".", 1)[0]
+    mode = (mode or "auto").lower()
+
+    if mode == "lexical":
+        return (3, stem)
+
+    index_pair = _parse_index_style_stem(stem)
+    timestamp_value = _parse_timestamp_style_stem(stem)
+
+    if mode == "index":
+        if index_pair is not None:
+            return (0, index_pair[0], index_pair[1], stem)
+        return (3, stem)
+
+    if mode == "timestamp":
+        if timestamp_value is not None:
+            return (1, timestamp_value, stem)
+        return (3, stem)
+
+    if index_pair is not None:
+        return (0, index_pair[0], index_pair[1], stem)
+    if timestamp_value is not None:
+        return (1, timestamp_value, stem)
+    return (3, stem)
 
 '''
 1. config init rot, init translation, datapath
@@ -255,8 +299,10 @@ class DualProcessTask:
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
         pre_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/output/test"
-        depth_txt_folder = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/depth_1"
-        angle_txt_folder = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/angle"
+        # depth_txt_folder = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/depth_1"
+        # angle_txt_folder = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/angle"
+        depth_txt_folder = "/media/amax/AE0E2AFD0E2ABE69/datasets/depth_1"
+        angle_txt_folder = "/media/amax/AE0E2AFD0E2ABE69/datasets/angle"
         # output_folder = "outputs"
         self.outputs = os.path.join(output_folder, output_name)
         self.pre_path = os.path.join(pre_path, output_name)
@@ -280,6 +326,7 @@ class DualProcessTask:
         self.last_frame_info = {}
         self.last_frame_info['observations'] = []
         self.last_frame_info['refine_conf'] = self.refine_conf
+        self.image_sort_mode = default_confs.get('image_sort_mode', 'auto')
         
         print(f'conf:\n{pformat(self.conf)}')
         # 初始化先验位姿和内参
@@ -297,16 +344,10 @@ class DualProcessTask:
         cam_query = default_confs["cam_query"]
         self.query_camera = Camera.from_colmap(cam_query) #! 2.
         
-        img_path = os.path.join(folder_path, 'images', dataset_name, 'interval1_CAM')
+        # img_path = os.path.join(folder_path, 'images', dataset_name, 'interval1_CAM')
+        img_path = os.path.join(folder_path, 'images', dataset_name)
         self.img_list = glob.glob(img_path + "/*.png") + glob.glob(img_path + "/*.jpg") + glob.glob(img_path + "/*.JPG")
-        # 支持 1671606440.199954033.jpg 这类带小数的时间戳：按数值排序，避免同秒多图顺序错乱
-        def _img_sort_key(path):
-            name = os.path.basename(path).rsplit(".", 1)[0]
-            try:
-                return (0, float(name))
-            except ValueError:
-                return (1, name)
-        self.img_list = sorted(self.img_list, key=_img_sort_key)
+        self.img_list = sorted(self.img_list, key=lambda p: make_image_sort_key(p, self.image_sort_mode))
         # self.img_list = self.img_list[:1]
         self.query_list = read_image_list(self.img_list, scale = self.query_resize_ratio, distortion=cam_query['distortion'], query_camera = raw_query_camera)
         
@@ -347,16 +388,20 @@ class DualProcessTask:
         # ref_DOM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/DSM/0.5/0.5/hangtianDOM.tif"
         # ref_DSM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/DSM/feicuiwan/feicuiwan/fcw_hangtian_DSM.tif"
         # ref_npy_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/DSM/0.5/0.5/feicuiwan_mix.npy"
-        # ref_DOM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/DSM/0.3/0.3/DSM0.3_ortho_merge.tif"
-        # ref_DSM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/DSM/0.3/0.3/DSM0.3_DSM_merge.tif"
-        # ref_npy_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/DSM/0.3/0.3/DSM0.3.npy"
+        # ref_DOM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/DSM/0.3/0.3/DOM_WGS84.tif"
+        # ref_DSM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/DSM/0.3/0.3/DSM_WGS84.tif"
+        # ref_npy_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/DSM/0.3/0.3/WGS840.3.npy"
         # ref_DOM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/HKairport/dom_wgs84.tif"
         # ref_DSM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/HKairport/dsm_wgs84.tif"
         # ref_npy_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/HKairport/NPY_WGS84.npy"
+
+        ref_DOM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/mapscape/model/usa_2/dom.tif"
+        ref_DSM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/mapscape/model/usa_2/dsm.tif"
+        ref_npy_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/mapscape/model/usa_2/WGS840.3.npy"
         
-        ref_DOM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/AMvalley/dom_wgs84.tif"
-        ref_DSM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/AMvalley/dsm_wgs84.tif"
-        ref_npy_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/AMvalley/NPY_WGS84.npy"
+        # ref_DOM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/AMvalley/dom_wgs84.tif"
+        # ref_DSM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/AMvalley/dsm_wgs84.tif"
+        # ref_npy_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/AMvalley/NPY_WGS84.npy"
         # ref_DOM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/HKisland_GNSS/dom_wgs84.tif"
         # ref_DSM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/HKisland_GNSS/dsm_wgs84.tif"
         # ref_npy_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/HKisland_GNSS/NPY_WGS84.npy"

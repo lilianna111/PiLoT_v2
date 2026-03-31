@@ -35,3 +35,16 @@ python /home/amax/Documents/code/PiLoT_v2/crop/test.py   --dsm_path /media/amax/
 
 1698132142.199930191.jpg 114.25856659002368 22.205075272773776 100.56471835349186  -6.979374889230779 0.8059505648727494 -176.4363512569613
 114.25834288619072 22.205296022324383 100.75537325828935  1.4894249861234055 2.1523655622721525 67.25778027171904
+
+python /home/amax/Documents/code/PiLoT_v2/crop/test.py \
+  --dsm_path /media/amax/AE0E2AFD0E2ABE69/datasets/mapscape/model/usa_2/dsm.tif \
+  --dom_path /media/amax/AE0E2AFD0E2ABE69/datasets/mapscape/model/usa_2/dom.tif \
+  --output_dir /home/amax/Documents/code/PiLoT_v2/tmp_crop_out \
+  --name test1 \
+  --lon -87.621232 \
+  --lat 41.860991999999996 \
+  --alt 500.0 \
+  --roll 0.0 \
+  --pitch 10.0 \
+  --yaw 281.3096633649805 \
+  --K_json /home/amax/Documents/code/PiLoT_v2/crop_wgs84_0329/K_mapscape.json 

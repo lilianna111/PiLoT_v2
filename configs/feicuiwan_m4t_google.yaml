@@ -16,7 +16,7 @@ render_config:
   # render_camera: [960, 540, 689.475, 689.45,478.75, 268.35]
   outputs: "outputs/citystars"
 default_confs:
-  image_sort_mode: index
+  image_sort_mode: timestamp
   from_render_test:
     checkpoint: "/media/amax/AE0E2AFD0E2ABE69/datasets/checkpoint/model@airzoo@512@Fourier@1203.ckpt"
     # checkpoint: "/media/amax/AE0E2AFD0E2ABE69/datasets/checkpoint/model@mapscape@512@Fourier@1203.ckpt"
@@ -70,9 +70,16 @@ default_confs:
   cam_query:
     max_size: 512
     model: "PINHOLE"
-    width: 3840
-    height: 2160
-    params: [2700.0, 2700.0, 1915.7, 1075.1]
+    # width: 3840
+    # height: 2160
+    # params: [2700.0, 2700.0, 1915.7, 1075.1]
+
+    # width: 2448
+    # height: 2048
+    # params: [1471.0652, 1471.0652, 1172.3576, 1046.3676]
+    width: 1920
+    height: 1080
+    params: [2317.6, 2317.6, 960, 540]
     # width: 960
     # height: 540
     # params: [675, 675, 478.925, 268.775]
@@ -103,14 +110,14 @@ default_confs:
     #             2687.5]
 
   # dataset_path: "/media/amax/AE0E2AFD0E2ABE69/datasets"
-  dataset_path: "/media/amax/AE0E2AFD0E2ABE69/datasets"
+  dataset_path: "/media/amax/AE0E2AFD0E2ABE69/datasets/mapscape"
   dataset_name: "DJI_20250612173353_0002_V_test"
   output_name: "DJI_20250612173353_0002_V_test"
   use_kf: false
   padding: True
   refine:
     origin: [0, 0, 0]
-    dis_thes: 100
-    R_thes: 100
+    dis_thes: 30
+    R_thes: 30
     mul: 0.001
   num_init_pose: 64

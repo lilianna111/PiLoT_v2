@@ -95,12 +95,14 @@ def run_test_0310_style_pipeline(
     t_far: float = 20000.0,
     save_outputs: bool = False,
     save_debug_vis: bool = False,
+    save_full_dom_points: bool = False,
+    print_corner_intrinsics: bool = False,
 ) -> dict[str, Any]:
     K = normalize_K(K)
 
-    if (save_outputs or save_debug_vis) and output_dir is None:
-        raise ValueError("output_dir is required when save_outputs=True or save_debug_vis=True")
-    if output_dir is not None and (save_outputs or save_debug_vis):
+    if (save_outputs or save_debug_vis or save_full_dom_points) and output_dir is None:
+        raise ValueError("output_dir is required when save_outputs=True or save_debug_vis=True or save_full_dom_points=True")
+    if output_dir is not None and (save_outputs or save_debug_vis or save_full_dom_points):
         _ensure_dir(output_dir)
 
     result = generate_ref_map(
@@ -118,6 +120,8 @@ def run_test_0310_style_pipeline(
         t_far=t_far,
         save_bbox=save_outputs,
         save_debug_vis=save_debug_vis,
+        save_full_dom_points=save_full_dom_points,
+        print_corner_intrinsics=print_corner_intrinsics,
     )
 
     img_aabb = result["bbox_dom_rgb"]
@@ -165,6 +169,8 @@ def run_test_0310_style_pipeline(
         saved_paths["bbox_mask"] = result["bbox_mask_path"]
     if result.get("debug_overlay_path"):
         saved_paths["crop_points_on_dom"] = result["debug_overlay_path"]
+    if result.get("full_dom_points_path"):
+        saved_paths["points_on_full_dom"] = result["full_dom_points_path"]
     if final_img_path:
         saved_paths["final_img"] = final_img_path
     if final_npy_path:

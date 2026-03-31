@@ -68,12 +68,12 @@ def main():
     )
     print(f"\n[TIMING] test.py 总耗时: {time.perf_counter() - t0:.3f}s")
 
-    # print("\n[DONE]")
-    # print("dom_path =", result["dom_path"])
-    # print("dsm_path =", result["dsm_path"])
-    # print("debug_overlay_path =", result.get("debug_overlay_path"))
-    # print("hit_lonlat =\n", result["hit_lonlat"])
-    # print("dsm_indices =\n", result["dsm_indices"])
+    print("\n[DONE]")
+    print("dom_path =", result["dom_path"])
+    print("dsm_path =", result["dsm_path"])
+    print("debug_overlay_path =", result.get("debug_overlay_path"))
+    print("hit_lonlat =\n", result["hit_lonlat"])
+    print("dsm_indices =\n", result["dsm_indices"])
 
 
 if __name__ == "__main__":

@@ -70,7 +70,7 @@ class DirectAbsoluteCost2:
         # 深度约束（DSM prior）：True=开启，False=关闭
         self.enable_depth_prior = False  # 改为 False 可关闭深度约束
         # 启用角度约束（roll/pitch prior）
-        self.enable_angle_prior = True
+        self.enable_angle_prior = False
         # LM 中角度项强度：提高角度先验在迭代中的实际影响
         self.angle_scale_fixed = 0.5
         # 角度梯度相对重投影梯度的目标比例（自适应缩放）
@@ -83,7 +83,7 @@ class DirectAbsoluteCost2:
         self.angle_gate_end_deg = 25.0
         self.angle_gate_min = 0.2
         # 最终选 pose 时也纳入角度（按有效点数缩放到与重投影可比量级）
-        self.angle_selection_weight = 0.0
+        self.angle_selection_weight = 1.0
         self.angle_debug_print = False
         self.angle_debug_max_candidates = 5
         self._angle_prev_mean_deg = None

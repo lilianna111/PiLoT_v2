@@ -474,7 +474,7 @@ def build_rotated_rectangle_from_center_and_edge(center_world, edge_length_along
     return rect_ecef
 
 
-def save_crop_points_on_dom(dom_crop, dsm_indices, rotated_rect_vertices_relative, save_path):
+def save_crop_points_on_dom(dom_crop, dsm_indices, rotated_rect_vertices_relative, save_path, center_index=None):
     img = _prepare_dom_for_vis(dom_crop).copy()
 
     if dsm_indices is not None and len(dsm_indices) > 0:
@@ -490,6 +490,39 @@ def save_crop_points_on_dom(dom_crop, dsm_indices, rotated_rect_vertices_relativ
         for idx, (x, y) in enumerate(np.array(rotated_rect_vertices_relative, dtype=np.int32)):
             cv2.circle(img, (int(x), int(y)), 6, (0, 255, 0), -1)
             cv2.putText(img, f"R{idx}", (int(x) + 6, int(y) - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2, cv2.LINE_AA)
+
+    if center_index is not None:
+        cx, cy = map(int, center_index)
+        cv2.circle(img, (cx, cy), 8, (255, 0, 255), -1)
+        cv2.putText(img, "C", (cx + 8, cy - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 3, cv2.LINE_AA)
+        cv2.putText(img, "C", (cx + 8, cy - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
+
+    Image.fromarray(img).save(save_path)
+
+
+def save_points_on_full_dom(dom_data, dsm_indices, save_path, center_index=None):
+    img = _prepare_dom_for_vis(dom_data).copy()
+    pts = np.array(dsm_indices, dtype=np.int32)
+    if pts.ndim != 2 or pts.shape[1] != 2:
+        raise ValueError(f"Expected Nx2 points, got shape={pts.shape}")
+
+    if len(pts) > 0:
+        pts_poly = pts.reshape((-1, 1, 2))
+        cv2.polylines(img, [pts_poly], isClosed=True, color=(255, 0, 0), thickness=4)
+        for idx, (x, y) in enumerate(pts):
+            cv2.circle(img, (int(x), int(y)), 10, (0, 255, 255), -1)
+            cv2.putText(img, str(idx), (int(x) + 12, int(y) - 12),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 3, cv2.LINE_AA)
+            cv2.putText(img, str(idx), (int(x) + 12, int(y) - 12),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2, cv2.LINE_AA)
+
+    if center_index is not None:
+        cx, cy = map(int, center_index)
+        cv2.circle(img, (cx, cy), 14, (255, 0, 255), -1)
+        cv2.putText(img, "C", (cx + 16, cy - 16),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 0), 4, cv2.LINE_AA)
+        cv2.putText(img, "C", (cx + 16, cy - 16),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
 
     Image.fromarray(img).save(save_path)
 
@@ -507,6 +540,8 @@ def crop_dsm_dom_angle(dom_data, dsm_data, dsm_transform, dsm_nodata,
         dsm_indices.append(geo_coords_to_dsm_index(lon_i, lat_i, dsm_transform))
 
     center_xyz = pixel_to_world(K, pose_w2c, center_point, target_z=area_minZ)
+    center_lon, center_lat, _ = ecef_to_lonlatalt(*center_xyz)
+    center_dsm_index = geo_coords_to_dsm_index(center_lon, center_lat, dsm_transform)
     short_edge_info = find_short_parallel_edge(world_points)
     if short_edge_info is None:
         raise RuntimeError("Unable to find short parallel edge from the projected quadrilateral.")
@@ -554,6 +589,7 @@ def crop_dsm_dom_angle(dom_data, dsm_data, dsm_transform, dsm_nodata,
         zz = zz_fixed
 
     crop_offset = (row_min, col_min)
+    center_dsm_index_relative = (center_dsm_index[1] - col_min, center_dsm_index[0] - row_min)
     rotated_rect_vertices_relative = []
     for row_v, col_v in rect_indices:
         rotated_rect_vertices_relative.append([col_v - col_min, row_v - row_min])
@@ -580,6 +616,9 @@ def crop_dsm_dom_angle(dom_data, dsm_data, dsm_transform, dsm_nodata,
         "dsm_indices": np.array([(col, row) for row, col in dsm_indices], dtype=np.int32),
         "dsm_indices_relative": np.array(dsm_indices_xy, dtype=np.int32),
         "world_points": np.array(world_points, dtype=np.float64),
+        "center_world": np.array(center_xyz, dtype=np.float64),
+        "center_dsm_index": np.array((center_dsm_index[1], center_dsm_index[0]), dtype=np.int32),
+        "center_dsm_index_relative": np.array(center_dsm_index_relative, dtype=np.int32),
         "crop_offset": crop_offset,
         "rotated_rect_vertices_relative": np.array(rotated_rect_vertices_relative, dtype=np.int32),
         "crop_mask": combined_mask,
@@ -603,6 +642,8 @@ def generate_ref_map(
     t_far: float = 20000.0,
     save_bbox: bool = False,
     save_debug_vis: bool = False,
+    save_full_dom_points: bool = False,
+    print_corner_intrinsics: bool = False,
 ):
     del num_samples, t_near, t_far
 
@@ -616,6 +657,18 @@ def generate_ref_map(
     height = int(image_height)
     image_points = [(0, 0), (width - 1, 0), (width - 1, height - 1), (0, height - 1)]
     center_point = (width // 2, height // 2)
+
+    if print_corner_intrinsics:
+        print("[corner_intrinsics] K_used_for_corners =")
+        print(np.array2string(K, precision=6, suppress_small=False))
+        print(f"[corner_intrinsics] image_width={width}, image_height={height}")
+        print(f"[corner_intrinsics] image_points={image_points}")
+        print(f"[corner_intrinsics] center_point={center_point}")
+        print(
+            "[corner_intrinsics] pose="
+            f" lon={pose_meta['lon']}, lat={pose_meta['lat']}, alt={pose_meta['alt']},"
+            f" roll={pose_meta['roll']}, pitch={pose_meta['pitch']}, yaw={pose_meta['yaw']}"
+        )
 
     result = crop_dsm_dom_angle(
         dom_array,
@@ -634,8 +687,9 @@ def generate_ref_map(
     ratio_npy_path = None
     ratio_mask_path = None
     overlay_path = None
+    full_dom_points_path = None
 
-    if output_dir is not None and (save_bbox or save_debug_vis):
+    if output_dir is not None and (save_bbox or save_debug_vis or save_full_dom_points):
         os.makedirs(output_dir, exist_ok=True)
 
     dom_crop_masked = apply_white_mask_to_dom_crop(result["dom_crop"], result["crop_mask"])
@@ -656,6 +710,16 @@ def generate_ref_map(
             result["dsm_indices_relative"],
             result["rotated_rect_vertices_relative"],
             overlay_path,
+            center_index=result["center_dsm_index_relative"],
+        )
+
+    if output_dir is not None and save_full_dom_points:
+        full_dom_points_path = os.path.join(output_dir, f"{name}_points_on_full_dom.jpg")
+        save_points_on_full_dom(
+            dom_array,
+            result["dsm_indices"],
+            full_dom_points_path,
+            center_index=result["center_dsm_index"],
         )
 
     result["bbox_dom_rgb"] = ratio_img_uint8
@@ -663,6 +727,7 @@ def generate_ref_map(
     result["bbox_npy_path"] = ratio_npy_path
     result["bbox_mask_path"] = ratio_mask_path
     result["debug_overlay_path"] = overlay_path
+    result["full_dom_points_path"] = full_dom_points_path
     result["area_minZ"] = area_minZ
     result["pose_w2c"] = pose_w2c
     result["pose_meta"] = pose_meta
