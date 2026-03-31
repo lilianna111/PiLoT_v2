@@ -10,7 +10,6 @@ import shutil
 import argparse
 import ast
 import numpy as np
-from pathlib import Path
 from tqdm import tqdm
 from pprint import pformat
 from pixloc.pixlib.geometry import Camera, Pose
@@ -25,8 +24,8 @@ import copy
 import logging
 import torch
 from multiprocessing import Process, Queue, Event
-from crop_wgs84_0329.crop.transform_colmap import transform_colmap_pose_intrinsic, normalize_K
-from crop_wgs84_0329.crop.proj2map import crop_dsm_dom_point, read_dsm_dom,affine_to_gdal_tuple,compute_area_min_z,compute_min_valid_dsm_height,build_corner_candidate_uvs
+from crop.crop.transform_colmap import transform_colmap_pose_intrinsic, normalize_K
+from crop.crop.proj2map import crop_dsm_dom_point, read_dsm_dom,affine_to_gdal_tuple,compute_min_valid_dsm_height,build_corner_candidate_uvs
 
 # from crop.crop.utils import read_DSM_config
 import torch.nn.functional as F
@@ -36,17 +35,6 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(processName)s] %(message)s",
     datefmt="%H:%M:%S")
-
-CROP_WGS84_ROOT = Path(__file__).resolve().parent / "crop_wgs84_0329"
-ENABLE_STAGE_TIMING = True
-
-
-def log_stage_timing(prefix, **timings_ms):
-    if not ENABLE_STAGE_TIMING:
-        return
-    parts = [f"{key}={value:.1f}ms" for key, value in timings_ms.items()]
-    logging.info("%s %s", prefix, " | ".join(parts))
-
 '''
 1. config init rot, init translation, datapath
 '''
@@ -108,7 +96,7 @@ def load_poses(pose_file, origin = None):
                 render_T_w2c = Pose.from_Rt(render_T_w2c[:3, :3], render_T_w2c[:3, 3])
                 pose_dict[name]['T_w2c'] = render_T_w2c.to_flat()
     return pose_dict
-def load_k_and_size(k_json_path=str(CROP_WGS84_ROOT / "K.json")):
+def load_k_and_size(k_json_path = "/home/amax/Documents/code/PiLoT_v2/crop/K.json"):
     import json
     with open(k_json_path, "r") as f:
         data = json.load(f)
@@ -118,38 +106,6 @@ def load_k_and_size(k_json_path=str(CROP_WGS84_ROOT / "K.json")):
     image_height = int(data["image_height"])
     K = normalize_K(K)
     return K, image_width, image_height
-
-
-def fit_crop_to_render_size(color, points3d, valid_mask, target_w, target_h):
-    src_h, src_w = color.shape[:2]
-    if src_h <= 0 or src_w <= 0:
-        raise ValueError("Invalid crop size for resize.")
-
-    scale = min(target_w / float(src_w), target_h / float(src_h))
-    resized_w = max(1, int(round(src_w * scale)))
-    resized_h = max(1, int(round(src_h * scale)))
-
-    color_resized = cv2.resize(color, (resized_w, resized_h), interpolation=cv2.INTER_LINEAR)
-    mask_resized = cv2.resize(valid_mask.astype(np.uint8), (resized_w, resized_h), interpolation=cv2.INTER_NEAREST)
-
-    pts_resized = []
-    for ch in range(3):
-        pts_resized.append(
-            cv2.resize(points3d[..., ch], (resized_w, resized_h), interpolation=cv2.INTER_NEAREST)
-        )
-    points_resized = np.stack(pts_resized, axis=-1).astype(np.float32)
-
-    y0 = (target_h - resized_h) // 2
-    x0 = (target_w - resized_w) // 2
-
-    color_canvas = np.full((target_h, target_w, color.shape[2]), 255, dtype=color_resized.dtype)
-    points_canvas = np.zeros((target_h, target_w, 3), dtype=np.float32)
-    mask_canvas = np.zeros((target_h, target_w), dtype=np.uint8)
-
-    color_canvas[y0:y0 + resized_h, x0:x0 + resized_w] = color_resized
-    points_canvas[y0:y0 + resized_h, x0:x0 + resized_w] = points_resized
-    mask_canvas[y0:y0 + resized_h, x0:x0 + resized_w] = mask_resized
-    return color_canvas, points_canvas, mask_canvas
 # def process_map_crop(ref_DSM_path, pose_data, ref_npy_path, name, map_data_pack, paths_pack, ray_area, ray_area_minZ):        # 包含输出路径
 #     """
 #     单帧处理函数：只负责计算和裁剪，不负责加载大地图
@@ -186,9 +142,8 @@ def process_map_crop(pose_data, name, crop_cache, output_dir):
     """
     单帧处理：只做 pose -> pose_w2c，再调用 crop
     """
-    t0 = time.perf_counter()
-    pose_w2c, _, pose_meta = transform_colmap_pose_intrinsic(pose_data, crop_cache["K"])
-    t1 = time.perf_counter()
+
+    pose_w2c, _, _ = transform_colmap_pose_intrinsic(pose_data, crop_cache["K"])
 
     result = crop_dsm_dom_point(
         dsm_path=crop_cache["dsm_path"],
@@ -209,17 +164,6 @@ def process_map_crop(pose_data, name, crop_cache, output_dir):
         geotransform=crop_cache["geotransform"],
         min_valid_dsm_height=crop_cache["min_valid_dsm_height"],
         corner_candidate_uvs=crop_cache["corner_candidate_uvs"],
-        area_min_z=crop_cache["area_min_z"],
-        pose_data=pose_data,
-        pose_meta=pose_meta,
-        dom_path=crop_cache["dom_path"],
-    )
-    t2 = time.perf_counter()
-    log_stage_timing(
-        f"[timing][crop:{name}]",
-        pose_to_w2c=(t1 - t0) * 1e3,
-        crop_core=(t2 - t1) * 1e3,
-        total=(t2 - t0) * 1e3,
     )
     return result
 
@@ -250,7 +194,7 @@ class DualProcessTask:
         # self.estimated_pose = os.path.join(folder_path, 'estimation', 'FPVLoc@'+output_name +'.txt') #'FPVLoc@'+ dataset_name +'.txt'
         # output_folder = "/media/amax/AE0E2AFD0E2ABE69/datasets/outputs/FPVLoc_depth"
         # output_folder = "/media/amax/AE0E2AFD0E2ABE69/datasets/outputs/uavscene"
-        output_folder = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/outputs_2.0"
+        output_folder = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/outputs_1.0"
         # output_folder = "/media/amax/AE0E2AFD0E2ABE69/datasets/outputs/FPVLoc_depth_weixing"
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
@@ -360,7 +304,7 @@ class DualProcessTask:
         # ref_DOM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/HKisland_GNSS/dom_wgs84.tif"
         # ref_DSM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/HKisland_GNSS/dsm_wgs84.tif"
         # ref_npy_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/HKisland_GNSS/NPY_WGS84.npy"
-        # # if not os.path.exists(ref_DSM_path):
+        # if not os.path.exists(ref_DSM_path):
         if not os.path.exists(ref_DSM_path):
             raise FileNotFoundError(f"找不到文件: {ref_DSM_path}")
         # 输出路径指向 worker 的 output
@@ -387,7 +331,6 @@ class DualProcessTask:
 
         crop_cache = {
             "dsm_path": ref_DSM_path,
-            "dom_path": ref_DOM_path,
             "dsm_array": dsm_array,
             "dom_array": dom_array,
             "dsm_transform": dsm_transform,
@@ -396,7 +339,6 @@ class DualProcessTask:
             "image_width": image_width,
             "image_height": image_height,
             "geotransform": affine_to_gdal_tuple(dsm_transform),
-            "area_min_z": compute_area_min_z(dsm_array, dsm_nodata),
             "min_valid_dsm_height": compute_min_valid_dsm_height(dsm_array, dsm_nodata),
             "corner_candidate_uvs": build_corner_candidate_uvs(image_width, image_height),
             "num_samples": 12000,
@@ -429,7 +371,8 @@ class DualProcessTask:
             else:
                 name = str(idx)
 
-            t_frame_start = time.perf_counter()
+            t0 = time.perf_counter()
+            tt0 = time.time()
             try:
                 # _ = process_map_crop(
                 #     ref_DSM_path,
@@ -450,7 +393,8 @@ class DualProcessTask:
             except Exception as exc:
                 logging.error(f"process_map_crop 失败 name={name}: {exc}")
                 continue
-            t_after_crop = time.perf_counter()
+            tt1 = time.time()
+            # print(f"process_map_crop 耗时: {tt1-tt0} 秒")
 
             # img_file = os.path.join(ref_rgb_path, f'{name}_dom.png')
             # npy_file = os.path.join(ref_depth_path, f'{name}_dsm.npy')
@@ -462,7 +406,6 @@ class DualProcessTask:
             # cv2.imwrite(save_path, color)
             # logging.info(f"Saved dom_warp image: {save_path}")
             points3d = crop_result["xyz_ecef"]
-            crop_mask = crop_result["crop_mask"].astype(bool)
             # color = cv2.imread(img_file, cv2.IMREAD_COLOR)
             # if color is None:
             if color is None or color.size == 0:
@@ -472,32 +415,38 @@ class DualProcessTask:
 
             # points3d = np.load(npy_file)
             # valid_mask = np.isfinite(points3d).all(axis=-1) & (points3d[..., 2] > 0)    #valid_mask: 有效掩码，用于标识哪些点是有效的
-            valid_mask = crop_mask & np.isfinite(points3d).all(axis=-1) & np.any(points3d != 0, axis=-1)
+            valid_mask = np.isfinite(points3d).all(axis=-1)
             if not np.any(valid_mask):
                 logging.error(f"裁剪结果无有效3D点")
                 continue
 
-            # --- 等比缩放到渲染目标框，避免不同 crop 长宽比被直接拉伸变形 ---
+            # --- 对齐参考尺寸到渲染相机分辨率（保证与 query 一致） ---
             target_w, target_h = int(self.render_camera_osg[0]), int(self.render_camera_osg[1])
-            color, points3d, mask = fit_crop_to_render_size(
-                color, points3d, valid_mask, target_w, target_h
-            )
-            t_after_fit = time.perf_counter()
+            color = cv2.resize(color, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+            pts_resized = []
+            for ch in range(3):
+                # pts_resized.append(cv2.resize(points3d[..., ch], (target_w, target_h), interpolation=cv2.INTER_LINEAR))
+                pts_resized.append(cv2.resize(points3d[..., ch], (target_w, target_h), interpolation=cv2.INTER_NEAREST))
+            points3d = np.stack(pts_resized, axis=-1).astype(np.float32)
+            # resize_save_path = os.path.join(self.outputs, f'{name}_1_resized.png')
+            # # 注意：内存中是RGB，OpenCV保存需要BGR，否则颜色错误
+            # cv2.imwrite(resize_save_path, cv2.cvtColor(color, cv2.COLOR_RGB2BGR))
+            # logging.info(f"Saved resized image: {resize_save_path}")
 
-            # padding 到 16 的倍数；mask 仍然补 0，保证不会采样到 pad 区域
+            # padding 到 16 的倍数，使用复制边界避免 0 值；同步处理有效掩码
+            mask = valid_mask.astype(np.uint8)
+            mask = cv2.resize(mask, (target_w, target_h), interpolation=cv2.INTER_NEAREST)
             if self.padding:
                 pad_h = (16 - target_h % 16) % 16
                 pad_w = (16 - target_w % 16) % 16
                 if pad_h or pad_w:
-                    color = cv2.copyMakeBorder(color, 0, pad_h, 0, pad_w, cv2.BORDER_CONSTANT, value=(255, 255, 255))
-                    mask = cv2.copyMakeBorder(mask, 0, pad_h, 0, pad_w, cv2.BORDER_CONSTANT, value=0)
+                    color = cv2.copyMakeBorder(color, 0, pad_h, 0, pad_w, cv2.BORDER_REPLICATE)
+                    # mask = cv2.copyMakeBorder(mask, 0, pad_h, 0, pad_w, cv2.BORDER_REPLICATE)
+                    mask = cv2.copyMakeBorder(mask, 0, pad_h, 0, pad_w, cv2.BORDER_CONSTANT, value=0) # 填充为0
                     points3d_ch = []
                     for ch in range(3):
-                        points3d_ch.append(
-                            cv2.copyMakeBorder(points3d[..., ch], 0, pad_h, 0, pad_w, cv2.BORDER_CONSTANT, value=0)
-                        )
+                        points3d_ch.append(cv2.copyMakeBorder(points3d[..., ch], 0, pad_h, 0, pad_w, cv2.BORDER_REPLICATE))
                     points3d = np.stack(points3d_ch, axis=-1)
-            t_after_pad = time.perf_counter()
             pad_path = self.outputs
             padded_save_path = os.path.join(pad_path, f'{name}.png')
             cv2.imwrite(padded_save_path, cv2.cvtColor(color, cv2.COLOR_RGB2BGR))
@@ -523,7 +472,9 @@ class DualProcessTask:
             # 这一步在 Worker 里做，传给 Queue 
             p2d_r = torch.from_numpy(p2d_r_np).view(1, 1, -1, 2)
             visible_r = torch.from_numpy(visible_r_np).view(1, 1, -1)
-            t_after_sample = time.perf_counter()
+
+            tt2 = time.time()
+            # print(f"p2d_r 耗时: {tt2-tt1} 秒")
             
             # # 保存调试信息：采样点的像素位置（padding 后）与图像尺寸
             # debug_npz = os.path.join(self.outputs, f'{name}_debug_samples.npz')
@@ -537,7 +488,7 @@ class DualProcessTask:
             # )
             # logging.info(f"Saved sampled coords: {debug_npz}, head={coords_sampled[:5].tolist()}")
 
-            t_before_queue = time.perf_counter()
+            t_render = (time.perf_counter() - t0) * 1e3  # ms
             fps_log_every += 1
             # if fps_log_every % 30 == 0:
             #     logging.info("crop: %.2f ms", t_render)
@@ -547,16 +498,6 @@ class DualProcessTask:
                 self.task_q.put((color, points_sampled, p2d_r, visible_r, euler, trans), timeout=1)
             except queue.Full:
                 break
-            t_after_queue = time.perf_counter()
-            log_stage_timing(
-                f"[timing][render:{name}]",
-                crop=(t_after_crop - t_frame_start) * 1e3,
-                fit_resize=(t_after_fit - t_after_crop) * 1e3,
-                pad_save=(t_after_pad - t_after_fit) * 1e3,
-                sample_pack=(t_after_sample - t_after_pad) * 1e3,
-                queue=(t_after_queue - t_before_queue) * 1e3,
-                total=(t_after_queue - t_frame_start) * 1e3,
-            )
             idx += 1
 
         self.stop_evt.set()
@@ -624,14 +565,12 @@ class DualProcessTask:
             item = self.task_q.get()
             if item is None:        # 渲染端提前喊停
                 break
-            t_loc_frame_start = time.perf_counter()
             color, depth, p2d_r, visible_r, render_euler, render_trans = item
             # 2) 反投影
             # t1 = time.time()
             if last_trans is None:
                 last_euler, last_trans = render_euler, render_trans
             P3d, T_w2c_mod, T_init, dd, p2d_r_final, render_T_ecef = self.back_project(depth, p2d_r, render_euler, render_trans, last_euler, last_trans)
-            t_after_back_project = time.perf_counter()
             # P3d, T_w2c_mod, T_init, dd = self.back_project(depth, render_euler, render_trans, render_euler, render_trans)
             
             # 控制传入优化的3D点规模，避免显存爆
@@ -644,6 +583,7 @@ class DualProcessTask:
             # t2 = time.time()
             # print('反投影耗时：', t2-t1)
             # print("P3d: ", P3d)
+            t0 = time.time()
             # 2) 调用定位
             ref_DSM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/HKisland_GNSS/dsm_wgs84.tif"
             if idx < len(gt_depth_list):
@@ -678,7 +618,7 @@ class DualProcessTask:
                     warned_missing_angle = True
             current_n = p2d_r_final.shape[-2] # 获取过滤后的点数
             visible_r_final = torch.ones((1, current_n), dtype=torch.bool, device=self.device)
-            t_before_run_query = time.perf_counter()
+            ttt0 = time.time()
             ret = localizer.run_query(
                 img_path, self.query_camera, self.render_camera,
                 color,  # render_frame
@@ -703,13 +643,9 @@ class DualProcessTask:
             # self.last_frame_info['euler_angles'] = ret['euler_angles']
             # self.last_frame_info['translation'] = ret['translation']
             # cv2.imwrite(f'{self.outputs}/{idx}_query.png', img_tensor)
-            t_after_run_query = time.perf_counter()
-            log_stage_timing(
-                f"[timing][loc:{os.path.basename(img_path)}]",
-                back_project=(t_after_back_project - t_loc_frame_start) * 1e3,
-                run_query=(t_after_run_query - t_before_run_query) * 1e3,
-                total=(t_after_run_query - t_loc_frame_start) * 1e3,
-            )
+            tt3 = time.time()
+            # print(f"run_query 耗时: {tt3-ttt0} 秒")
+            # print(f"loc 耗时: {tt3-t0} 秒")
             # if idx % fps_log_every == 0:
             #     logging.info("loc %.2f ms", (time.time()-t0)*1e3)
             
@@ -875,3 +811,8 @@ if __name__ == "__main__":
     
     dual_task.eval()
     
+
+
+
+
+

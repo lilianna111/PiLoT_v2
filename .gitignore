@@ -1,0 +1,11 @@
+.history/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+
+crop/test/
+crop_wgs84_0329/test/
+debug_feats/

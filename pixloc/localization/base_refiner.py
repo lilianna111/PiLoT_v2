@@ -233,6 +233,7 @@ class BaseRefiner:
     
     def refine_query_pose(self, qname: str, qcamera: Camera, ref_camera: Camera, render_frame, T_query_initial: Pose, T_render: Pose, Points_3D_ECEF, p2d_r=None,visible_r=None,dd = None, gt_depth=None, gt_roll=None, gt_pitch=None, dsm_path=None, render_T_ecef=None,
                           multiscales: Optional[List[int]] = None, gt_pose_dict=None, last_frame_info = {}, query_resize_ratio = 1, image_query=None) -> Dict:
+        t_total_start = time.perf_counter()
         (qcamera, ref_camera, render_frame, T_query_initial, T_render, Points_3D_ECEF, p2d_r,visible_r, dd, gt_depth, gt_roll, gt_pitch, dsm_path, render_T_ecef, last_frame_info) = \
         move_inputs_to_cuda(qcamera, ref_camera, render_frame, T_query_initial, T_render, Points_3D_ECEF, p2d_r,visible_r, dd, gt_depth, gt_roll, gt_pitch, dsm_path, render_T_ecef, last_frame_info)
         refine_conf = last_frame_info['refine_conf']
@@ -268,6 +269,7 @@ class BaseRefiner:
         render_frame = zero_pad(int(query_weight_px.item()), render_frame)
 
         T_query_initial_poses = copy.deepcopy(T_query_initial) #w2c
+        t_after_prepare = time.perf_counter()
 
         # end_time4 = time.time()
         # print('预处理 ：', end_time4 - start_time)
@@ -276,6 +278,7 @@ class BaseRefiner:
         features_ref_dense, scales_ref = self.dense_feature_extraction(render_frame)
         # print("features_ref_dense: ", features_ref_dense.shape)
         features_query, scales_query = self.dense_feature_extraction(image_query)
+        t_after_features = time.perf_counter()
 
         # 基于不确定度图筛选低不确定度的点
         if p2d_r is not None and Points_3D_ECEF is not None:
@@ -304,6 +307,15 @@ class BaseRefiner:
         #     self.last_last_feature_query = copy.deepcopy(self.last_feature_query)
         # self.last_feature_query = copy.deepcopy(features_query)
         end_time1 = time.time()
+        t_after_optimize = time.perf_counter()
+        logger.info(
+            "[timing][refiner:%s] prepare=%.1fms | feature_extract=%.1fms | optimize=%.1fms | total=%.1fms",
+            os.path.basename(qname),
+            (t_after_prepare - t_total_start) * 1e3,
+            (t_after_features - t_after_prepare) * 1e3,
+            (t_after_optimize - t_after_features) * 1e3,
+            (t_after_optimize - t_total_start) * 1e3,
+        )
         # print('refine pose costs: ', end_time1 - start_time)
         # start_time = time.time()
         # render estimate pose
@@ -459,7 +471,7 @@ class BaseRefiner:
         # print("len(features_query) ",len(features_query))
         for idx, level in enumerate(reversed(range(len(features_query)))):
         # for idx, level in enumerate(range(len(features_query))):
-            start_time = time.time()
+            level_start = time.perf_counter()
             F_q, F_ref = features_query[level], features_ref[level]
             qcamera_feat = qcamera.scale(scales_query[level])
             rcamera_feat = rcamera.scale(scales_ref[level])
@@ -537,7 +549,12 @@ class BaseRefiner:
                                 # last_c_query = last_c_query,
                                 # prior = self.prior,
                                 # T_kf = T_kf.to(F_q)
-                                )            
+                                )
+            logger.info(
+                "[timing][optimizer][level=%s] %.1fms",
+                level,
+                (time.perf_counter() - level_start) * 1e3,
+            )
             if fail.all().item():
                 return {**ret, 'success': False}
 

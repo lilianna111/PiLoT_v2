@@ -71,5 +71,6 @@ import os
 # print("--------------prior------------------")
 # evaluate_XYZ_EULER("/media/amax/AE0E2AFD0E2ABE69/datasets/poses/DJI_20250612194622_0018_V.txt", "/media/amax/AE0E2AFD0E2ABE69/datasets/outputs_render/FPVLoc_high/DJI_20250612194622_0018_V_prior.txt")
 
-evaluate("/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/outputs/interval1_HKisland_GNSS01_1.txt", "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/poses/interval1_HKisland_GNSS01_1.txt")
-evaluate("/media/amax/AE0E2AFD0E2ABE69/datasets/outputs_render/uavscene/interval1_HKisland_GNSS01_1.txt", "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/poses/interval1_HKisland_GNSS01_1.txt")
+evaluate("/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/outputs_2.0/interval1_AMvalley01.txt", "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/poses/interval1_AMvalley01.txt")
+evaluate("/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/outputs/interval1_AMvalley01.txt", "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/poses/interval1_AMvalley01.txt")
+evaluate("/media/amax/AE0E2AFD0E2ABE69/datasets/outputs_render/uavscene/interval1_AMvalley01.txt", "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/poses/interval1_AMvalley01.txt")

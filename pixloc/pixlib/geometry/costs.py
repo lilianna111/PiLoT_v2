@@ -84,7 +84,7 @@ class DirectAbsoluteCost2:
         self.angle_gate_min = 0.2
         # 最终选 pose 时也纳入角度（按有效点数缩放到与重投影可比量级）
         self.angle_selection_weight = 0.0
-        self.angle_debug_print = True
+        self.angle_debug_print = False
         self.angle_debug_max_candidates = 5
         self._angle_prev_mean_deg = None
         # 深度先验强度（与角度先验同样思路：按梯度范数自适应缩放）
@@ -114,7 +114,7 @@ class DirectAbsoluteCost2:
         # 最终选 pose 时纳入深度项（按有效点数缩放）
         self.depth_selection_weight = 0.0
         # Debug policy: collect per-call stats and print one summary at the end.
-        self.depth_debug_print = True
+        self.depth_debug_print = False
         self.depth_debug_verbose = False
         self.depth_verify_query_print = False
         self._depth_debug_state = None
@@ -1161,6 +1161,7 @@ class DirectAbsoluteCost2:
         w_loss_angle = None
         cost_proj_candidates = None
         cost_angle_candidates = None
+        cost_angle_candidates_raw = None
         cost_depth_candidates = None
         if angle_res is not None:
             cost_angle = (angle_res ** 2).sum(-1, keepdim=True)  # [1, num_init_pose, 1]
@@ -1171,7 +1172,8 @@ class DirectAbsoluteCost2:
             cost_proj_robust = cost_all[..., :-1] * valid_norm
             cost_angle_robust = cost_all[..., -1:]
             cost_proj_candidates = cost_proj_robust
-            cost_angle_candidates = float(self.angle_selection_weight) * valid_count * cost_angle_robust
+            cost_angle_candidates_raw = valid_count * cost_angle_robust
+            cost_angle_candidates = float(self.angle_selection_weight) * cost_angle_candidates_raw
             if depth_res is not None:
                 cost_depth = depth_res ** 2
                 cost_depth_robust, w_loss_depth, _ = self.loss_fn1(
@@ -1439,30 +1441,65 @@ class DirectAbsoluteCost2:
             print("[angle_prior/skip] " + ", ".join(reason))
 
         if self.angle_debug_print and cost_proj_candidates is not None:
-            proj_np = cost_proj_candidates.detach().cpu().numpy().reshape(-1)
+            proj_np = cost_proj_candidates.detach().cpu().numpy().reshape(
+                cost_proj_candidates.shape[1], -1
+            ).sum(axis=-1)
             total_np = cost.detach().cpu().numpy().reshape(cost.shape[1], -1).sum(axis=-1)
             order = np.argsort(total_np)[: int(self.angle_debug_max_candidates)]
             angle_np = None
             depth_np = None
+            if cost_angle_candidates_raw is not None:
+                angle_raw_np = cost_angle_candidates_raw.detach().cpu().numpy().reshape(
+                    cost_angle_candidates_raw.shape[1], -1
+                ).sum(axis=-1)
+            else:
+                angle_raw_np = None
             if cost_angle_candidates is not None:
-                angle_np = cost_angle_candidates.detach().cpu().numpy().reshape(-1)
+                angle_np = cost_angle_candidates.detach().cpu().numpy().reshape(
+                    cost_angle_candidates.shape[1], -1
+                ).sum(axis=-1)
             if cost_depth_candidates is not None:
-                depth_np = cost_depth_candidates.detach().cpu().numpy().reshape(-1)
+                depth_np = cost_depth_candidates.detach().cpu().numpy().reshape(
+                    cost_depth_candidates.shape[1], -1
+                ).sum(axis=-1)
+            proj_total_np = proj_np.copy()
+            if depth_np is not None:
+                proj_total_np = proj_total_np + depth_np
+            order_proj_only = np.argsort(proj_total_np)[: int(self.angle_debug_max_candidates)]
             print(
                 "[selection/topk] angle_selection_weight={:.3f} depth_selection_weight={:.3f}".format(
                     float(self.angle_selection_weight),
                     float(self.depth_selection_weight),
                 )
             )
-            for rank, idx_sel in enumerate(order):
+            print("[selection/topk_proj_only]")
+            for rank, idx_sel in enumerate(order_proj_only):
+                angle_raw_val = 0.0 if angle_raw_np is None else float(angle_raw_np[idx_sel])
                 angle_val = 0.0 if angle_np is None else float(angle_np[idx_sel])
                 depth_val = 0.0 if depth_np is None else float(depth_np[idx_sel])
                 print(
-                    "[selection/candidate] rank={} idx={} total={:.6f} proj={:.6f} angle={:.6f} depth={:.6f}".format(
+                    "[selection/proj_only] rank={} idx={} proj_total={:.6f} proj={:.6f} angle_raw={:.6f} angle_scaled={:.6f} depth={:.6f}".format(
+                        int(rank),
+                        int(idx_sel),
+                        float(proj_total_np[idx_sel]),
+                        float(proj_np[idx_sel]),
+                        angle_raw_val,
+                        angle_val,
+                        depth_val,
+                    )
+                )
+            print("[selection/topk_total]")
+            for rank, idx_sel in enumerate(order):
+                angle_raw_val = 0.0 if angle_raw_np is None else float(angle_raw_np[idx_sel])
+                angle_val = 0.0 if angle_np is None else float(angle_np[idx_sel])
+                depth_val = 0.0 if depth_np is None else float(depth_np[idx_sel])
+                print(
+                    "[selection/candidate] rank={} idx={} total={:.6f} proj={:.6f} angle_raw={:.6f} angle={:.6f} depth={:.6f}".format(
                         int(rank),
                         int(idx_sel),
                         float(total_np[idx_sel]),
                         float(proj_np[idx_sel]),
+                        angle_raw_val,
                         angle_val,
                         depth_val,
                     )

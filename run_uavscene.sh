@@ -68,6 +68,12 @@ names=(
   "interval1_AMvalley01"
   "interval1_HKisland_GNSS01_1"
   "interval1_HKisland01"
+  "interval1_HKisland_GNSS01"
+  "interval1_AMvalley01_1"
+  "interval1_AMvalley01_2"
+  "interval1_AMvalley01_3"
+  "interval1_AMvalley01"
+  "interval1_HKisland_GNSS01_2"
 )
 
 
@@ -135,9 +141,13 @@ target_names=(
   # "DJI_20250612194150_0014_V"
   # "DJI_20250612194903_0021_V"
   # "interval1_HKairport01"
-  # "interval1_AMvalley01"
+  "interval1_AMvalley01"
+  "interval1_AMvalley01_1"
+  # "interval1_AMvalley01_2"
+  # "interval1_AMvalley01_3"
   # "interval1_HKisland_GNSS01_1"
-  "interval1_HKisland_GNSS01_1"
+  # "interval1_HKisland_GNSS01"
+  # "interval1_HKisland_GNSS01_2"
   # "interval1_HKisland01"
 
 )
