@@ -343,10 +343,12 @@ def evaluate(results, gt, only_localized=False):
     for th_t, th_R in zip(threshs_t, threshs_R):
         ratio = np.mean((errors_t < th_t) & (errors_R < th_R))
         out += '\n\t{:.0f}cm, {:.1f}deg : {:.2f}%'.format(th_t * 100, th_R, ratio * 100)
-    # for th_yaw in threshs_yaw:
-    #     ratio_yaw = np.mean((errors_yaw < th_yaw)) 
-    #     out += '\n\t{:.2f}deg : {:.2f}%'.format(th_yaw, ratio_yaw * 100)
-
+    for th_yaw in threshs_yaw:
+        ratio_yaw = np.mean((errors_yaw < th_yaw)) 
+        out += '\n\t{:.2f}deg : {:.2f}%'.format(th_yaw, ratio_yaw * 100)
+    for th_t in threshs_t:
+        ratio_t = np.mean((errors_t < th_t)) 
+        out += '\n\t{:.2f}deg : {:.2f}%'.format(th_t, ratio_t * 100)
     
     print(out)
     return out

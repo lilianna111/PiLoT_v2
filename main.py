@@ -69,20 +69,24 @@ def make_image_sort_key(path, mode="auto"):
     stem = os.path.basename(path).rsplit(".", 1)[0]
     mode = (mode or "auto").lower()
 
-    if mode == "lexical":
-        return (3, stem)
-
     index_pair = _parse_index_style_stem(stem)
     timestamp_value = _parse_timestamp_style_stem(stem)
+
+    if mode == "lexical":
+        return (3, stem)
 
     if mode == "index":
         if index_pair is not None:
             return (0, index_pair[0], index_pair[1], stem)
+        if timestamp_value is not None:
+            return (1, timestamp_value, stem)
         return (3, stem)
 
     if mode == "timestamp":
         if timestamp_value is not None:
             return (1, timestamp_value, stem)
+        if index_pair is not None:
+            return (0, index_pair[0], index_pair[1], stem)
         return (3, stem)
 
     if index_pair is not None:
@@ -299,10 +303,10 @@ class DualProcessTask:
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
         pre_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/output/test"
-        # depth_txt_folder = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/depth_1"
-        # angle_txt_folder = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/angle"
-        depth_txt_folder = "/media/amax/AE0E2AFD0E2ABE69/datasets/depth_1"
-        angle_txt_folder = "/media/amax/AE0E2AFD0E2ABE69/datasets/angle"
+        depth_txt_folder = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/depth_1"
+        angle_txt_folder = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/angle"
+        # depth_txt_folder = "/media/amax/AE0E2AFD0E2ABE69/datasets/mapscape/depth"
+        # angle_txt_folder = "/media/amax/AE0E2AFD0E2ABE69/datasets/mapscape/angle"
         # output_folder = "outputs"
         self.outputs = os.path.join(output_folder, output_name)
         self.pre_path = os.path.join(pre_path, output_name)
@@ -344,8 +348,8 @@ class DualProcessTask:
         cam_query = default_confs["cam_query"]
         self.query_camera = Camera.from_colmap(cam_query) #! 2.
         
-        # img_path = os.path.join(folder_path, 'images', dataset_name, 'interval1_CAM')
-        img_path = os.path.join(folder_path, 'images', dataset_name)
+        img_path = os.path.join(folder_path, 'images', dataset_name, 'interval1_CAM')
+        # img_path = os.path.join(folder_path, 'images', dataset_name)
         self.img_list = glob.glob(img_path + "/*.png") + glob.glob(img_path + "/*.jpg") + glob.glob(img_path + "/*.JPG")
         self.img_list = sorted(self.img_list, key=lambda p: make_image_sort_key(p, self.image_sort_mode))
         # self.img_list = self.img_list[:1]
@@ -395,16 +399,16 @@ class DualProcessTask:
         # ref_DSM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/HKairport/dsm_wgs84.tif"
         # ref_npy_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/HKairport/NPY_WGS84.npy"
 
-        ref_DOM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/mapscape/model/usa_2/dom.tif"
-        ref_DSM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/mapscape/model/usa_2/dsm.tif"
-        ref_npy_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/mapscape/model/usa_2/WGS840.3.npy"
+        # ref_DOM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/mapscape/model/usa_2/dom.tif"
+        # ref_DSM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/mapscape/model/usa_2/dsm.tif"
+        # ref_npy_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/mapscape/model/usa_2/WGS840.3.npy"
         
         # ref_DOM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/AMvalley/dom_wgs84.tif"
         # ref_DSM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/AMvalley/dsm_wgs84.tif"
         # ref_npy_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/AMvalley/NPY_WGS84.npy"
-        # ref_DOM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/HKisland_GNSS/dom_wgs84.tif"
-        # ref_DSM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/HKisland_GNSS/dsm_wgs84.tif"
-        # ref_npy_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/HKisland_GNSS/NPY_WGS84.npy"
+        ref_DOM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/HKisland_GNSS/dom_wgs84.tif"
+        ref_DSM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/HKisland_GNSS/dsm_wgs84.tif"
+        ref_npy_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/HKisland_GNSS/NPY_WGS84.npy"
         # # if not os.path.exists(ref_DSM_path):
         if not os.path.exists(ref_DSM_path):
             raise FileNotFoundError(f"找不到文件: {ref_DSM_path}")
@@ -690,7 +694,7 @@ class DualProcessTask:
             # print('反投影耗时：', t2-t1)
             # print("P3d: ", P3d)
             # 2) 调用定位
-            ref_DSM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/uavscene/model/DOMDSM/HKisland_GNSS/dsm_wgs84.tif"
+            ref_DSM_path = "/media/amax/AE0E2AFD0E2ABE69/datasets/mapscape/model/usa_2/dsm.tif"
             if idx < len(gt_depth_list):
                 gt_depth = gt_depth_list[idx]
                 # print(f"idx: {idx} ; gt_depth: {gt_depth}")

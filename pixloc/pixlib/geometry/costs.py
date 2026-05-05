@@ -70,7 +70,7 @@ class DirectAbsoluteCost2:
         # 深度约束（DSM prior）：True=开启，False=关闭
         self.enable_depth_prior = False  # 改为 False 可关闭深度约束
         # 启用角度约束（roll/pitch prior）
-        self.enable_angle_prior = False
+        self.enable_angle_prior = True
         # LM 中角度项强度：提高角度先验在迭代中的实际影响
         self.angle_scale_fixed = 0.5
         # 角度梯度相对重投影梯度的目标比例（自适应缩放）
@@ -118,6 +118,10 @@ class DirectAbsoluteCost2:
         self.depth_debug_verbose = False
         self.depth_verify_query_print = False
         self._depth_debug_state = None
+        self.wgs84_restore_debug_print = True
+        self.wgs84_restore_debug_max_calls = 10
+        self.wgs84_restore_debug_max_candidates = 3
+        self._wgs84_restore_debug_calls = 0
 
     def begin_depth_debug_session(self, tag: str = ""):
         self._depth_debug_state = {
@@ -238,6 +242,57 @@ class DirectAbsoluteCost2:
             wgs84_poses.append([lon, lat, alt, roll, pitch, yaw])
 
         return wgs84_poses
+
+    def _debug_print_restored_wgs84(
+        self,
+        pose_data_q: Tensor,
+        render_T_ecef,
+        origin=None,
+        dd=None,
+    ) -> None:
+        if not self.wgs84_restore_debug_print:
+            return
+        if self._wgs84_restore_debug_calls >= int(self.wgs84_restore_debug_max_calls):
+            return
+        if render_T_ecef is None:
+            return
+
+        if origin is not None and dd is not None:
+            t_c2w_ecef = self._pose_translations_ecef(pose_data_q, origin, dd)
+        else:
+            t_c2w_ecef = render_T_ecef
+
+        wgs84_poses = self._poses_to_wgs84(pose_data_q, t_c2w_ecef)
+        t_ecef = (
+            t_c2w_ecef.to(dtype=torch.float64)
+            if isinstance(t_c2w_ecef, torch.Tensor)
+            else torch.from_numpy(np.asarray(t_c2w_ecef)).to(dtype=torch.float64)
+        )
+        t_ecef_np = t_ecef.detach().cpu().numpy()
+        if t_ecef_np.ndim == 1:
+            t_ecef_np = t_ecef_np[None, :]
+
+        sample_n = min(
+            len(wgs84_poses),
+            int(self.wgs84_restore_debug_max_candidates),
+        )
+        print(
+            f"[cost/wgs84_restore] call={self._wgs84_restore_debug_calls} "
+            f"num_candidates={len(wgs84_poses)}"
+        )
+        for idx in range(sample_n):
+            lon, lat, alt, roll, pitch, yaw = wgs84_poses[idx]
+            x, y, z = t_ecef_np[idx]
+            print(
+                "  [candidate {}] ECEF=({:.3f}, {:.3f}, {:.3f}) -> "
+                "WGS84 lon={:.9f}, lat={:.9f}, alt={:.3f}, "
+                "roll={:.6f}, pitch={:.6f}, yaw={:.6f}".format(
+                    idx, float(x), float(y), float(z),
+                    float(lon), float(lat), float(alt),
+                    float(roll), float(pitch), float(yaw),
+                )
+            )
+        self._wgs84_restore_debug_calls += 1
 
     def _pose_translations_ecef(self, pose_data_q: Tensor, origin, dd) -> Tensor:
         pose = pose_data_q[0] if pose_data_q.ndim == 3 else pose_data_q
@@ -671,6 +726,13 @@ class DirectAbsoluteCost2:
         cam_K = None
         if cam_data_q is not None and torch.is_tensor(cam_data_q) and cam_data_q.numel() >= 6:
             cam_K = cam_data_q[0, 0, :6].detach().cpu().tolist()
+
+        self._debug_print_restored_wgs84(
+            pose_data_q,
+            render_T_ecef,
+            origin=origin,
+            dd=dd,
+        )
 
         # -------- Step 1: 参考帧特征与有效 mask --------
         # 在参考帧 2D 点 p2d_r 上插值特征，得到 [1, N, C]

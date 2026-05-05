@@ -252,26 +252,31 @@ def batch_process_all_folders(base_dir, txt_dir, output_base):
 
 if __name__ == "__main__":
     # 你的 render_camera 数据
-    RENDER_PARAMS = [1920, 1080, 957.85, 537.55, 1920, 1080, 1350.0, 1350.0]
+    RENDER_PARAMS = [1920, 1080, 960, 540, 1920, 1080, 1350.0, 1350.0]
     target_name = [
-        "zigzag_3_back_left",
-        "zigzag_3_back_right",
-        "zigzag_3_front_left",
-        "zigzag_3_front_right",
-        "zigzag_3_center",
-        "zigzag_4_back_left",
-        "zigzag_4_back_right",
-        "zigzag_4_front_left",
-        "zigzag_4_front_right",
-        "zigzag_4_center",
+        # "zigzag_3_back_left",
+        # "zigzag_3_back_right",
+        # "zigzag_3_front_left",
+        # "zigzag_3_front_right",
+        # "zigzag_3_center",
+        # "zigzag_4_back_left",
+        # "zigzag_4_back_right",
+        # "zigzag_4_front_left",
+        # "zigzag_4_front_right",
+        # "zigzag_4_center",
         # "zigzag_2_center"
+        "usa8_back_left",
+        "usa8_back_right",
+        "usa8_center",
+        "usa8_front_left",
+        "usa8_front_right",
     ]
     for target in target_name:
     
         # 配置
-        pose_file = f"/media/amax/PS2000/google/{target}.txt"
-        image_folder = f"/media/amax/PS2000/render/{target}"
-        output_folder = f"/media/amax/PS2000/render_pose/{target}"
+        pose_file = f"/media/amax/AE0E2AFD0E2ABE69/datasets/mapscape/metashape/poses/{target}.txt"
+        image_folder = f"/media/amax/AE0E2AFD0E2ABE69/datasets/mapscape/metashape/render/{target}"
+        output_folder = f"/media/amax/AE0E2AFD0E2ABE69/datasets/mapscape/metashape/render_pose/{target}"
     
         # 直接提取参数
         IMAGE_WIDTH = RENDER_PARAMS[0]

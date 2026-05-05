@@ -117,7 +117,7 @@ default_confs:
   padding: True
   refine:
     origin: [0, 0, 0]
-    dis_thes: 30
-    R_thes: 30
+    dis_thes: 100
+    R_thes: 100
     mul: 0.001
   num_init_pose: 64
